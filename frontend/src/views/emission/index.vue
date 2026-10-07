@@ -63,6 +63,38 @@
       </tbody>
     </table>
 
+    <section class="detail-panel">
+      <h3>发电量统计待复核清单</h3>
+      <p class="page-desc">发电量统计提交填报或标记数据异常后进入本清单，复核后结论同步销项。</p>
+      <div v-if="reviewError" class="error-banner" role="alert">
+        <span>待复核清单取不到数，请重试一次</span>
+        <button class="btn" type="button" @click="retryReview">再试一次</button>
+      </div>
+      <template v-else>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th v-for="column in reviewColumns" :key="column">{{ column }}</th>
+              <th>填报结论</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in reviewRows" :key="String(row.id)">
+              <td v-for="column in reviewColumns" :key="column">{{ reviewCell(row, column) }}</td>
+              <td>
+                <span :class="String(row.status) === '数据异常' ? 'error-text' : 'success-text'">
+                  {{ String(row.status) === '数据异常' ? '数据异常，需重点复核' : '已填报，待复核' }}
+                </span>
+              </td>
+            </tr>
+            <tr v-if="!reviewRows.length">
+              <td :colspan="reviewColumns.length + 1" class="empty-state">暂无待复核的发电量统计记录</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条环保指标监控记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -77,6 +109,9 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  pendingReviewItems,
+  READ_ERROR_MESSAGE,
+  recoverRows,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -86,18 +121,43 @@ const columns = ["监控编号", "监控指标", "限值要求", "实测值", "�
 const actions = ["提交监控", "判定达标", "标记未达标"]
 const statuses = ["待监控", "监控中", "已达标", "未达标"]
 const stats = [{"label": "待监控指标", "value": 0}, {"label": "已达标指标", "value": 0}, {"label": "未达标指标", "value": 0}]
+const reviewColumns = ["统计编号", "统计周期", "发电量", "吨垃圾发电量", "填报人员"]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const reviewRows = ref<EntryRow[]>([])
+const reviewError = ref('')
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+
+function reviewCell(row: EntryRow, column: string): string {
+  const value = row[column]
+  return value === undefined || value === null || String(value).trim() === ''
+    ? '暂无统计'
+    : String(value)
+}
+
+function loadReview() {
+  reviewError.value = ''
+  const payload = pendingReviewItems()
+  reviewRows.value = payload.rows
+}
+
+function retryReview() {
+  try {
+    loadReview()
+  } catch {
+    recoverRows()
+    loadReview()
+  }
+}
 
 function resetFilters() {
   filters.value = {}
@@ -133,5 +193,12 @@ function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  try {
+    loadReview()
+  } catch (error) {
+    reviewError.value = error instanceof Error ? error.message : READ_ERROR_MESSAGE
+  }
+})
 </script>
