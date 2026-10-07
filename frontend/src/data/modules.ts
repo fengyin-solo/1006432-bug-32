@@ -155,6 +155,8 @@ export const MODULES: ModuleMeta[] = [
     actions: ["提交填报", "确认审核", "标记异常"],
     actionTargets: {"提交填报": "已填报", "确认审核": "已审核", "标记异常": "数据异常"},
     metrics: ["待填报周期", "已审核周期", "数据异常周期"],
+    uniqueField: "统计周期",
+    strictFlow: true,
   },
   {
     key: "emission",
